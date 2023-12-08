@@ -23,7 +23,7 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 from paddle.nn.initializer import TruncatedNormal, Constant, Normal
-
+from ppocr.preprocessors.map_preprocessor import MapPreprocessor
 
 trunc_normal_ = TruncatedNormal(std=.02)
 normal_ = Normal
@@ -101,25 +101,40 @@ class Attention(nn.Layer):
                  qkv_bias=False,
                  qk_scale=None,
                  attn_drop=0.,
-                 proj_drop=0.):
+                 proj_drop=0.,
+                 use_map=False):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim**-0.5
 
         self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
+        if use_map:
+            self.qkv = nn.Linear(dim, dim * 2, bias_attr=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x):
+    def forward(self, x, map_ = None):
         # B= paddle.shape(x)[0]
         N, C = x.shape[1:]
-        qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //
-                                   self.num_heads)).transpose((2, 0, 3, 1, 4))
-        q, k, v = qkv[0], qkv[1], qkv[2]
 
-        attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+        if map_ is None:
+            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //
+                                    self.num_heads)).transpose((2, 0, 3, 1, 4))
+            q, k, v = qkv[0], qkv[1], qkv[2]
+
+            attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+
+        else:
+            kv = self.qkv(x).reshape((-1, N, 2, self.num_heads, C //
+                                            self.num_heads)).transpose((2, 0, 3, 1, 4))
+            k, v = kv[0], kv[1]
+
+            q = map_.reshape((-1, N, self.num_heads, C //
+                                   self.num_heads)).transpose(0, 2, 1, 3)
+            attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+            
         attn = nn.functional.softmax(attn, axis=-1)
         attn = self.attn_drop(attn)
 
@@ -144,8 +159,10 @@ class Block(nn.Layer):
         super().__init__()
         if isinstance(norm_layer, str):
             self.norm1 = eval(norm_layer)(dim, epsilon=epsilon)
+            self.norm2 = eval(norm_layer)(dim, epsilon=epsilon)
         elif isinstance(norm_layer, Callable):
             self.norm1 = norm_layer(dim)
+            self.norm2= norm_layer(dim)
         else:
             raise TypeError(
                 "The norm_layer must be str or paddle.nn.layer.Layer class")
@@ -156,12 +173,20 @@ class Block(nn.Layer):
             qk_scale=qk_scale,
             attn_drop=attn_drop,
             proj_drop=drop)
+        self.cross_attn = Attention(
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            qk_scale=qk_scale,
+            attn_drop=attn_drop,
+            proj_drop=drop,
+            use_map=True)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else Identity()
         if isinstance(norm_layer, str):
-            self.norm2 = eval(norm_layer)(dim, epsilon=epsilon)
+            self.norm3 = eval(norm_layer)(dim, epsilon=epsilon)
         elif isinstance(norm_layer, Callable):
-            self.norm2 = norm_layer(dim)
+            self.norm3 = norm_layer(dim)
         else:
             raise TypeError(
                 "The norm_layer must be str or paddle.nn.layer.Layer class")
@@ -171,9 +196,10 @@ class Block(nn.Layer):
                        act_layer=act_layer,
                        drop=drop)
 
-    def forward(self, x):
+    def forward(self, x, map_=None):
         x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        x = x + self.drop_path(self.cross_attn(self.norm2(x), map_))
+        x = x + self.drop_path(self.mlp(self.norm3(x)))
         return x
 
 
@@ -266,6 +292,10 @@ class VisionTransformer(nn.Layer):
         self.head = nn.Linear(embed_dim,
                               class_num) if class_num > 0 else Identity()
 
+        # Map preprocessor
+        self.preprocessor = MapPreprocessor(map_type="corner")
+        # self.preprocessor = MapPreprocessor(map_type="cluster_skeleton")
+
         trunc_normal_(self.pos_embed)
         self.out_channels = embed_dim
         self.apply(self._init_weights)
@@ -281,11 +311,15 @@ class VisionTransformer(nn.Layer):
 
     def forward_features(self, x):
         B = paddle.shape(x)[0]
+        map_ = self.preprocessor(x)
+        map_ = map_ + self.pos_embed
+        map_ = self.pos_drop(map_)
+
         x = self.patch_embed(x)
         x = x + self.pos_embed
         x = self.pos_drop(x)
         for blk in self.blocks:
-            x = blk(x)
+            x = blk(x, map_)
         x = self.norm(x)
         return x
 
