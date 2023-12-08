@@ -109,8 +109,6 @@ class Attention(nn.Layer):
         self.scale = qk_scale or head_dim**-0.5
 
         self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
-        if use_map:
-            self.qkv = nn.Linear(dim, dim * 2, bias_attr=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
@@ -118,22 +116,47 @@ class Attention(nn.Layer):
     def forward(self, x, map_ = None):
         # B= paddle.shape(x)[0]
         N, C = x.shape[1:]
+        qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //
+                                self.num_heads)).transpose((2, 0, 3, 1, 4))
+        q, k, v = qkv[0], qkv[1], qkv[2]
 
-        if map_ is None:
-            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //
-                                    self.num_heads)).transpose((2, 0, 3, 1, 4))
-            q, k, v = qkv[0], qkv[1], qkv[2]
+        attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+        attn = nn.functional.softmax(attn, axis=-1)
+        attn = self.attn_drop(attn)
 
-            attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+        x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
 
-        else:
-            kv = self.qkv(x).reshape((-1, N, 2, self.num_heads, C //
-                                            self.num_heads)).transpose((2, 0, 3, 1, 4))
-            k, v = kv[0], kv[1]
 
-            q = map_.reshape((-1, N, self.num_heads, C //
-                                   self.num_heads)).transpose(0, 2, 1, 3)
-            attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+class CrossAttention(nn.Layer):
+    def __init__(self,
+                 dim,
+                 num_heads=8,
+                 qkv_bias=False,
+                 qk_scale=None,
+                 attn_drop=0.,
+                 proj_drop=0.):
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = qk_scale or head_dim**-0.5
+
+        self.kv = nn.Linear(dim, dim * 2, bias_attr=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x, map_):
+        # B= paddle.shape(x)[0]
+        N, C = x.shape[1:]
+        kv = self.kv(x).reshape((-1, N, 2, self.num_heads, C //
+                                        self.num_heads)).transpose((2, 0, 3, 1, 4))
+        k, v = kv[0], kv[1]
+        q = map_.reshape((-1, N, self.num_heads, C //
+                                self.num_heads)).transpose(0, 2, 1, 3)
+        attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
             
         attn = nn.functional.softmax(attn, axis=-1)
         attn = self.attn_drop(attn)
@@ -142,6 +165,7 @@ class Attention(nn.Layer):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
+
 
 class Block(nn.Layer):
     def __init__(self,
@@ -173,14 +197,13 @@ class Block(nn.Layer):
             qk_scale=qk_scale,
             attn_drop=attn_drop,
             proj_drop=drop)
-        self.cross_attn = Attention(
+        self.cross_attn = CrossAttention(
             dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qk_scale=qk_scale,
             attn_drop=attn_drop,
-            proj_drop=drop,
-            use_map=True)
+            proj_drop=drop)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else Identity()
         if isinstance(norm_layer, str):
