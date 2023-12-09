@@ -117,6 +117,7 @@ class MapPreprocessor(BasePreprocessor):
                 img_bg = cluster_skeleton_detector(sin_img, self.csize, self.maxIter)
            
             map = np.expand_dims(img_bg, axis=0).astype(np.float32)
+            map = np.expand_dims(map, axis=0).astype(np.float32)
             batch_map.append(map)
 
         batch_map = np.concatenate(batch_map, axis=0)
