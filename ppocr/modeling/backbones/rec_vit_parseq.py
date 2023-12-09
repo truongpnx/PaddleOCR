@@ -155,7 +155,7 @@ class CrossAttention(nn.Layer):
                                         self.num_heads)).transpose((2, 0, 3, 1, 4))
         k, v = kv[0], kv[1]
         q = map_.reshape((-1, N, self.num_heads, C //
-                                self.num_heads)).transpose(0, 2, 1, 3)
+                                self.num_heads)).transpose((0, 2, 1, 3))
         attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
             
         attn = nn.functional.softmax(attn, axis=-1)
