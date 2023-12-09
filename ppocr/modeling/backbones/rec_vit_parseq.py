@@ -284,6 +284,13 @@ class VisionTransformer(nn.Layer):
             patch_size=patch_size,
             in_chans=in_channels,
             embed_dim=embed_dim)
+
+        self.map_patch_embed = PatchEmbed(
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=1,
+            embed_dim=embed_dim)
+
         num_patches = self.patch_embed.num_patches
 
         self.pos_embed = self.create_parameter(shape=(1, num_patches, embed_dim), default_initializer=zeros_)
@@ -334,7 +341,7 @@ class VisionTransformer(nn.Layer):
 
     def forward_features(self, x):
         B = paddle.shape(x)[0]
-        map_ = self.preprocessor(x)
+        map_ = self.map_patch_embed(self.preprocessor(x))
         map_ = map_ + self.pos_embed
         map_ = self.pos_drop(map_)
 

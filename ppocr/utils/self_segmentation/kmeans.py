@@ -3,7 +3,7 @@ from scipy.cluster.vq import *
 from pylab import *
 import numpy as np
 # import faiss
-import mkl
+# import mkl
 def clusterpixels(im, k):
     im = np.array(im)
     h, w = im.shape
