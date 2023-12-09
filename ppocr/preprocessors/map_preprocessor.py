@@ -23,7 +23,7 @@ from .base_preprocessor import BasePreprocessor
 
 from ppocr.utils.self_segmentation.kmeans import clusterpixels
 from ppocr.utils.skeleton_tracing import trace_skeleton 
-
+import paddle
 
 def cluster_skeleton_detector(img, csize, maxIter):
     """
@@ -97,15 +97,15 @@ class MapPreprocessor(BasePreprocessor):
     def forward(self, batch_img):
         """
         Args:
-            batch_img (Tensor): Images to be rectified with size
+            batch_img (paddle.Tensor): Images to be rectified with size
                 :math:`(N, C, H, W)`.
 
         Returns:
-            Tensor: Corner map with size :math:`(N, 1, H, W)`.
+            paddle.Tensor: Corner map with size :math:`(N, 1, H, W)`.
         """
-        device = batch_img.device
-        img_np = batch_img.cpu().numpy()
-        batch_map = torch.Tensor()
+        device = batch_img.place
+        img_np = batch_img.numpy()
+        batch_map = []
         for i in range(img_np.shape[0]):
             
             sin_img = img_np[i].transpose(1,2,0) * 255
@@ -116,10 +116,29 @@ class MapPreprocessor(BasePreprocessor):
             elif self.map_type == "cluster_skeleton":
                 img_bg = cluster_skeleton_detector(sin_img, self.csize, self.maxIter)
            
-            mask = torch.tensor(img_bg).unsqueeze(0).unsqueeze(0)
-            mask = mask.to(torch.float32)
-            batch_map = torch.cat([batch_map, mask], dim=0)
+            map = np.expand_dims(img_bg, axis=0).astype(np.float32)
+            batch_map.append(map)
 
-        batch_map = batch_map.to(device)
+        batch_map = np.concatenate(batch_map, axis=0)
+        batch_map = paddle.to_tensor(batch_map, place=device)
+
+        # device = batch_img.device
+        # img_np = batch_img.cpu().numpy()
+        # batch_map = torch.Tensor()
+        # for i in range(img_np.shape[0]):
+            
+        #     sin_img = img_np[i].transpose(1,2,0) * 255
+        #     img_bg = np.zeros(sin_img.shape[:2], dtype="uint8")
+        #     if self.map_type == "corner":
+        #         img_bg = corner_detector(sin_img, self.maxCorners, self.qualityLevel, self.minDistance)
+            
+        #     elif self.map_type == "cluster_skeleton":
+        #         img_bg = cluster_skeleton_detector(sin_img, self.csize, self.maxIter)
+           
+        #     mask = torch.tensor(img_bg).unsqueeze(0).unsqueeze(0)
+        #     mask = mask.to(torch.float32)
+        #     batch_map = torch.cat([batch_map, mask], dim=0)
+
+        # batch_map = batch_map.to(device)
 
         return batch_map
