@@ -22,7 +22,7 @@ import cv2
 from .base_preprocessor import BasePreprocessor
 
 from ppocr.utils.self_segmentation.kmeans import clusterpixels
-from ppocr.utils.skeleton_tracing import trace_skeleton 
+from ppocr.utils.skeleton_tracing.swig import trace_skeleton 
 import paddle
 
 def cluster_skeleton_detector(img, csize, maxIter):
