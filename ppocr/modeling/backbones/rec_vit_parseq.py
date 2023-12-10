@@ -143,6 +143,7 @@ class CrossAttention(nn.Layer):
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim**-0.5
 
+        self.map_q = nn.Linear(dim, dim, bias_attr=qkv_bias)
         self.kv = nn.Linear(dim, dim * 2, bias_attr=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
@@ -154,7 +155,7 @@ class CrossAttention(nn.Layer):
         kv = self.kv(x).reshape((-1, N, 2, self.num_heads, C //
                                         self.num_heads)).transpose((2, 0, 3, 1, 4))
         k, v = kv[0], kv[1]
-        q = map_.reshape((-1, N, self.num_heads, C //
+        q = self.map_q(map_).reshape((-1, N, self.num_heads, C //
                                 self.num_heads)).transpose((0, 2, 1, 3))
         attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
             
