@@ -23,6 +23,7 @@ from .base_preprocessor import BasePreprocessor
 
 from ppocr.utils.self_segmentation.kmeans import clusterpixels
 from ppocr.utils.skeleton_tracing.swig import trace_skeleton 
+# from ppocr.utils.skeleton_tracing.py import trace_skeleton 
 import paddle
 
 def cluster_skeleton_detector(img, csize, maxIter):
@@ -41,12 +42,18 @@ def cluster_skeleton_detector(img, csize, maxIter):
 
     #0, 1 array
     mask = clusterpixels(gray_img, 2).astype(np.uint8)
-    polys = trace_skeleton.from_numpy(mask, csize, maxIter)
 
+    #### For swig skeleton
+    polys = trace_skeleton.from_numpy(mask, csize, maxIter)
+    ####
+
+    #### For python skeleton
     # mask = thinning(mask)
 
     # rects = []
     # polys = traceSkeleton(mask, 0, 0, mask.shape[1], mask.shape[0], csize, maxIter, rects)
+    ####
+
     try:
         for poly in polys:
             poly = np.int0(poly)
