@@ -19,7 +19,8 @@ https://github.com/roatienza/deep-text-recognition-benchmark/blob/master/modules
 import numpy as np
 import paddle
 import paddle.nn as nn
-from ppocr.modeling.backbones.rec_svtrnet import Block, PatchEmbed, zeros_, trunc_normal_, ones_
+from ppocr.modeling.backbones.rec_vit_parseq import Block, PatchEmbed, zeros_, trunc_normal_, ones_
+from ppocr.preprocessors.map_preprocessor import MapPreprocessor
 
 scale_dim_heads = {'tiny': [192, 3], 'small': [384, 6], 'base': [768, 12]}
 
@@ -56,8 +57,14 @@ class ViTSTR(nn.Layer):
             img_size=img_size,
             in_channels=in_channels,
             embed_dim=embed_dim,
+            patch_size=patch_size)
+        
+        self.map_patch_embed = PatchEmbed(
+            img_size=img_size,
             patch_size=patch_size,
-            mode='linear')
+            in_chans=1,
+            embed_dim=embed_dim)
+
         num_patches = self.patch_embed.num_patches
 
         self.pos_embed = self.create_parameter(
@@ -82,12 +89,15 @@ class ViTSTR(nn.Layer):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 act_layer=eval(act_layer),
-                epsilon=epsilon,
-                prenorm=False) for i in range(depth)
+                epsilon=epsilon) for i in range(depth)
         ])
         self.norm = eval(norm_layer)(embed_dim, epsilon=epsilon)
 
         self.out_channels = out_channels
+
+        # Map preprocessor
+        self.preprocessor = MapPreprocessor(map_type="corner")
+        # self.preprocessor = MapPreprocessor(map_type="cluster_skeleton")
 
         trunc_normal_(self.pos_embed)
         trunc_normal_(self.cls_token)
@@ -104,13 +114,18 @@ class ViTSTR(nn.Layer):
 
     def forward_features(self, x):
         B = x.shape[0]
+
+        map_ = self.map_patch_embed(self.preprocessor(x))
+        map_ = map_ + self.pos_embed
+        map_ = self.pos_drop(map_)
+
         x = self.patch_embed(x)
         cls_tokens = paddle.tile(self.cls_token, repeat_times=[B, 1, 1])
         x = paddle.concat((cls_tokens, x), axis=1)
         x = x + self.pos_embed
         x = self.pos_drop(x)
         for blk in self.blocks:
-            x = blk(x)
+            x = blk(x, map_)
         x = self.norm(x)
         return x
 
