@@ -1,7 +1,7 @@
-import torch.nn as nn
+import paddle.nn as nn
 
 
-class BasePreprocessor(nn.Module):
+class BasePreprocessor(nn.Layer):
     """Base Preprocessor class for text recognition."""
 
     def forward(self, x, **kwargs):
