@@ -20,6 +20,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import sys
+from typing import Any
 import six
 import cv2
 import numpy as np
@@ -67,6 +68,107 @@ class DecodeImage(object):
         data['image'] = img
         return data
 
+class GenerateMask(object):
+    def __init__(self, mask_type = 'corner', **kwargs):
+        self.mask_type = mask_type
+        if mask_type == "corner":
+            self.maxCorners = 200
+            self.qualityLevel = 0.01
+            self.minDistance = 3
+            if 'maxCorners' in kwargs:
+                self.maxCorners = kwargs['maxCorners']
+            if 'qualityLevel' in kwargs:
+                self.qualityLevel = kwargs['qualityLevel']
+            if 'minDistance' in kwargs:
+                self.minDistance = kwargs['minDistance']
+
+        elif mask_type == "cluster_skeleton":
+            self.csize = 10
+            self.maxIter = 999
+            if 'csize' in kwargs:
+                self.csize = kwargs['csize']
+            if 'maxIter' in kwargs:
+                self.maxIter = kwargs['maxIter']
+        
+    def __call__(self, data):
+        img = data['image']
+
+        from PIL import Image
+        if isinstance(img, Image.Image):
+            img = np.array(img)
+        assert isinstance(img,
+                          np.ndarray), "invalid input 'img' in GenerateMask"
+        if self.mask_type == 'corner':
+            mask = self.corner_detector(img, self.maxCorners, self.qualityLevel, self.minDistance)
+
+        elif self.mask_type == 'cluster_skeleton':
+            mask = self.cluster_skeleton_detector(img, self.csize, self.maxIter)
+
+        img = np.concatenate((img, mask), axis=0)
+        data['image'] = img
+        return data
+    
+    def corner_detector(img, maxCorners, qualityLevel, minDistance):
+
+        import cv2
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray_img = np.float32(gray_img)
+        img_bg = np.zeros(gray_img.shape, dtype="uint8")
+
+        corners = cv2.goodFeaturesToTrack(gray_img, maxCorners, qualityLevel, minDistance)
+        try:
+            corners = np.int0(corners)
+            for corner in corners:
+                x,y = corner.ravel()
+                # print(x,y)
+                img_bg[y,x] = 1
+        except TypeError:
+            print('No corner detected!')
+        # print("-------------------")
+        return img_bg
+    
+    def cluster_skeleton_detector(img, csize, maxIter):
+        """
+            Args:
+                img (numpy): Images to be rectified with size
+                    :math:`(C, H, W)`.
+
+            Returns:
+                Tensor: Skeleton map with size :math:`(1, H, W)`.
+        """
+        from ppocr.utils.self_segmentation.kmeans import clusterpixels
+        from ppocr.utils.skeleton_tracing.swig import trace_skeleton 
+        # from ppocr.utils.skeleton_tracing.py.trace_skeleton import * 
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray_img = np.float32(gray_img)
+        img_bg = np.zeros(gray_img.shape, dtype="uint8")
+
+        #0, 1 array
+        mask = clusterpixels(gray_img, 2).astype(np.uint8)
+
+        #### For swig skeleton
+        polys = trace_skeleton.from_numpy(mask, csize, maxIter)
+        ####
+
+        #### For python skeleton
+        # mask = thinning(mask)
+
+        # rects = []
+        # polys = traceSkeleton(mask, 0, 0, mask.shape[1], mask.shape[0], csize, maxIter, rects)
+        ####
+
+        try:
+            for poly in polys:
+                poly = np.int0(poly)
+                for p in poly:
+                    x,y = p.ravel()
+                    # print(x,y)
+                    img_bg[y,x] = 1
+        except TypeError:
+            print('No poly detected!')
+        # print("-------------------")
+
+        return img_bg
 
 class NormalizeImage(object):
     """ normalize image such as substract mean, divide std
