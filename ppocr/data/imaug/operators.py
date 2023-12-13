@@ -109,8 +109,6 @@ class GenerateMask(object):
         return data
     
     def corner_detector(img, maxCorners, qualityLevel, minDistance):
-
-        import cv2
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray_img = np.float32(gray_img)
         img_bg = np.zeros(gray_img.shape, dtype="uint8")
