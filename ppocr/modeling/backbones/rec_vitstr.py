@@ -114,10 +114,10 @@ class ViTSTR(nn.Layer):
 
     def forward_features(self, x):
         B = x.shape[0]
-        x, map_ = paddle.split(x, num_or_sections=[3, -1], axis=1)
+        map_ = self.map_patch_embed(self.preprocessor(x))
 
-        # map_ = self.map_patch_embed(self.preprocessor(x))
-        map_ = self.map_patch_embed(map_)
+        # x, map_ = paddle.split(x, num_or_sections=[3, -1], axis=1)
+        # map_ = self.map_patch_embed(map_)
         map_ = map_ + self.pos_embed
         map_ = self.pos_drop(map_)
 
