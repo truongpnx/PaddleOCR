@@ -99,7 +99,7 @@ class GenerateMask(object):
             mask = self.corner_detector(img, self.maxCorners, self.qualityLevel, self.minDistance)
 
         elif self.mask_type == 'cluster_skeleton':
-            mask = self.cluster_skeleton_detector(img, self.csize, self.maxIter)
+            mask = self.cluster_skeleton_detector(img, self.method)
 
         img = np.concatenate((img, mask), axis=0)
         data['image'] = img
@@ -122,7 +122,7 @@ class GenerateMask(object):
         # print("-------------------")
         return img_bg
     
-    def cluster_skeleton_detector(img, csize, maxIter):
+    def cluster_skeleton_detector(img, method):
         """
             Args:
                 img (numpy): Images to be rectified with size
@@ -141,7 +141,7 @@ class GenerateMask(object):
         mask = clusterpixels(gray_img, 2).astype(np.uint8)
 
         try:
-            img_bg = skeletonize(mask)
+            img_bg = skeletonize(mask, method=method)
         except TypeError:
             print('No skeleton detected!')
         # print("-------------------")
