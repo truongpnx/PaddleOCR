@@ -69,7 +69,7 @@ class DecodeImage(object):
         return data
 
 class GenerateMask(object):
-     def __init__(self, mask_type = 'corner', channel_first=False, **kwargs):
+    def __init__(self, mask_type = 'corner', channel_first=False, **kwargs):
         self.mask_type = mask_type
         self.channel_first = channel_first
         if mask_type == "corner":
