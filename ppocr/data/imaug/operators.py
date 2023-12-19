@@ -105,7 +105,7 @@ class GenerateMask(object):
         data['image'] = img
         return data
     
-    def corner_detector(img, maxCorners, qualityLevel, minDistance):
+    def corner_detector(self, img, maxCorners, qualityLevel, minDistance):
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray_img = np.float32(gray_img)
         img_bg = np.zeros(gray_img.shape, dtype="uint8")
@@ -122,7 +122,7 @@ class GenerateMask(object):
         # print("-------------------")
         return img_bg
     
-    def cluster_skeleton_detector(img, method):
+    def cluster_skeleton_detector(self, img, method):
         """
             Args:
                 img (numpy): Images to be rectified with size
