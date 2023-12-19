@@ -69,8 +69,9 @@ class DecodeImage(object):
         return data
 
 class GenerateMask(object):
-    def __init__(self, mask_type = 'corner', **kwargs):
+     def __init__(self, mask_type = 'corner', channel_first=False, **kwargs):
         self.mask_type = mask_type
+        self.channel_first = channel_first
         if mask_type == "corner":
             self.maxCorners = 200
             self.qualityLevel = 0.01
@@ -101,6 +102,17 @@ class GenerateMask(object):
         elif self.mask_type == 'cluster_skeleton':
             mask = self.cluster_skeleton_detector(img, self.method)
 
+        try:
+            mask *= 255
+            if self.channel_first:
+                mask = np.expand_dims(mask, axis=0)
+                img = np.concatenate((img, mask), axis=0)
+            else:
+                mask = np.expand_dims(mask, axis=len(mask.shape))
+                img = np.concatenate((img, mask), axis=-1)
+        except:
+            raise ValueError('{}\n{}'.format(mask.shape, img.shape))
+        
         img = np.concatenate((img, mask), axis=0)
         data['image'] = img
         return data
