@@ -83,12 +83,9 @@ class GenerateMask(object):
                 self.minDistance = kwargs['minDistance']
 
         elif mask_type == "cluster_skeleton":
-            self.csize = 10
-            self.maxIter = 999
-            if 'csize' in kwargs:
-                self.csize = kwargs['csize']
-            if 'maxIter' in kwargs:
-                self.maxIter = kwargs['maxIter']
+            self.method = 'zhang'
+            if 'method' in kwargs:
+                self.csize = kwargs['method']
         
     def __call__(self, data):
         img = data['image']
@@ -135,8 +132,7 @@ class GenerateMask(object):
                 Tensor: Skeleton map with size :math:`(1, H, W)`.
         """
         from ppocr.utils.self_segmentation.kmeans import clusterpixels
-        from ppocr.utils.skeleton_tracing.swig import trace_skeleton 
-        # from ppocr.utils.skeleton_tracing.py.trace_skeleton import * 
+        from skimage.morphology import skeletonize
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray_img = np.float32(gray_img)
         img_bg = np.zeros(gray_img.shape, dtype="uint8")
@@ -144,26 +140,10 @@ class GenerateMask(object):
         #0, 1 array
         mask = clusterpixels(gray_img, 2).astype(np.uint8)
 
-        #### For swig skeleton
-        polys = trace_skeleton.from_numpy(mask, csize, maxIter)
-        ####
-
-        #### For python skeleton
-        # mask = thinning(mask)
-
-        # rects = []
-        # polys = traceSkeleton(mask, 0, 0, mask.shape[1], mask.shape[0], csize, maxIter, rects)
-        ####
-
         try:
-            for poly in polys:
-                poly = np.int0(poly)
-                for p in poly:
-                    x,y = p.ravel()
-                    # print(x,y)
-                    img_bg[y,x] = 1
+            img_bg = skeletonize(mask)
         except TypeError:
-            print('No poly detected!')
+            print('No skeleton detected!')
         # print("-------------------")
 
         return img_bg

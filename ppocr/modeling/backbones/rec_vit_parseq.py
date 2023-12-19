@@ -23,7 +23,6 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 from paddle.nn.initializer import TruncatedNormal, Constant, Normal
-from ppocr.preprocessors.map_preprocessor import MapPreprocessor
 
 trunc_normal_ = TruncatedNormal(std=.02)
 normal_ = Normal
@@ -289,7 +288,7 @@ class VisionTransformer(nn.Layer):
         self.map_patch_embed = PatchEmbed(
             img_size=img_size,
             patch_size=patch_size,
-            in_chans=1,
+            in_chans=in_channels,
             embed_dim=embed_dim)
 
         num_patches = self.patch_embed.num_patches
@@ -323,10 +322,6 @@ class VisionTransformer(nn.Layer):
         self.head = nn.Linear(embed_dim,
                               class_num) if class_num > 0 else Identity()
 
-        # Map preprocessor
-        self.preprocessor = MapPreprocessor(map_type="corner")
-        # self.preprocessor = MapPreprocessor(map_type="cluster_skeleton")
-
         trunc_normal_(self.pos_embed)
         self.out_channels = embed_dim
         self.apply(self._init_weights)
@@ -342,9 +337,10 @@ class VisionTransformer(nn.Layer):
 
     def forward_features(self, x):
         B = paddle.shape(x)[0]
-        map_ = self.map_patch_embed(self.preprocessor(x))
-        # x, map_ = paddle.split(x, num_or_sections=[3, -1], axis=1)
-        # map_ = self.map_patch_embed(map_)
+        x, map_ = paddle.split(x, num_or_sections=[3, -1], axis=1)
+        map_ = paddle.cat((map_, map_, map_), axis=1)
+
+        map_ = self.map_patch_embed(map_)
         map_ = map_ + self.pos_embed
         map_ = self.pos_drop(map_)
 

@@ -20,7 +20,6 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 from ppocr.modeling.backbones.rec_vit_parseq import Block, PatchEmbed, zeros_, trunc_normal_, ones_
-from ppocr.preprocessors.map_preprocessor import MapPreprocessor
 
 scale_dim_heads = {'tiny': [192, 3], 'small': [384, 6], 'base': [768, 12]}
 
@@ -62,7 +61,7 @@ class ViTSTR(nn.Layer):
         self.map_patch_embed = PatchEmbed(
             img_size=img_size,
             patch_size=patch_size,
-            in_chans=1,
+            in_chans=in_channels,
             embed_dim=embed_dim)
 
         num_patches = self.patch_embed.num_patches
@@ -95,10 +94,6 @@ class ViTSTR(nn.Layer):
 
         self.out_channels = out_channels
 
-        # Map preprocessor
-        self.preprocessor = MapPreprocessor(map_type="corner")
-        # self.preprocessor = MapPreprocessor(map_type="cluster_skeleton")
-
         trunc_normal_(self.pos_embed)
         trunc_normal_(self.cls_token)
         self.apply(self._init_weights)
@@ -114,10 +109,10 @@ class ViTSTR(nn.Layer):
 
     def forward_features(self, x):
         B = x.shape[0]
-        map_ = self.map_patch_embed(self.preprocessor(x))
+        x, map_ = paddle.split(x, num_or_sections=[3, -1], axis=1)
+        map_ = paddle.cat((map_, map_, map_), axis=1)
 
-        # x, map_ = paddle.split(x, num_or_sections=[3, -1], axis=1)
-        # map_ = self.map_patch_embed(map_)
+        map_ = self.map_patch_embed(map_)
         map_ = map_ + self.pos_embed
         map_ = self.pos_drop(map_)
 
