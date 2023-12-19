@@ -113,7 +113,6 @@ class GenerateMask(object):
         except:
             raise ValueError('{}\n{}'.format(mask.shape, img.shape))
         
-        img = np.concatenate((img, mask), axis=0)
         data['image'] = img
         return data
     
