@@ -338,7 +338,7 @@ class VisionTransformer(nn.Layer):
     def forward_features(self, x):
         B = paddle.shape(x)[0]
         x, map_ = paddle.split(x, num_or_sections=[3, -1], axis=1)
-        map_ = paddle.cat((map_, map_, map_), axis=1)
+        map_ = paddle.concat(x=[map_, map_, map_], axis=1)
 
         map_ = self.map_patch_embed(map_)
         map_ = map_ + self.pos_embed
